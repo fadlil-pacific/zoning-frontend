@@ -38,12 +38,11 @@ export const zoningApi = {
   getOverlays: async (studyArea, radius) =>
     safePost('/zoning/overlays', { studyArea, radius }, { overlays: mockOverlays }),
 
-  runAnalysis: async (studyArea, radius) =>
-    safePost('/zoning/analysis', { studyArea, radius }, {
-      contextId: 'mock-ctx-1',
-      overlays: mockOverlays,
-      recommendations: mockRecs
-    }),
+  runAnalysis: async (studyArea, extra = {}) => {
+    // extra dapat berisi { term }
+    const { data } = await api.post('/zoning/analysis', { studyArea, ...extra });
+    return data;
+  },
 
   askChat: async (message, contextId) =>
     safePost('/zoning/chat', { message, contextId }, {

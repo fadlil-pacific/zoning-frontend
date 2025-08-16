@@ -1,29 +1,34 @@
+// src/hooks/useZoning.js
 import { useState, useCallback } from 'react';
 import { zoningApi } from '../services/zoningApi';
 
 export function useZoning() {
-  const [studyArea, setStudyArea] = useState({ mode: 'recommendation' });
-  const [radius, setRadius] = useState(1000);
-  const [overlays, setOverlays] = useState([]);          // Array<Overlay>
-  const [recs, setRecs] = useState([]);                  // Array<Recommendation>
+  const [bbox, setBbox] = useState({ south: -6.3, west: 106.7, north: -6.1, east: 106.95 });
+  const [term, setTerm] = useState('');
+  const [overlays, setOverlays] = useState([]);
+  const [recs, setRecs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [contextId, setContextId] = useState(null);      // id analisis (kalau backend pakai)
+  const [contextId, setContextId] = useState(null);
 
-  const runAnalysis = useCallback(async () => {
+  const runAnalysis = useCallback(async (opts) => {
     setLoading(true);
     try {
-      const res = await zoningApi.runAnalysis(studyArea, radius);
+      const bboxArray = opts?.bboxArray ?? [bbox.west, bbox.south, bbox.east, bbox.north]; // [minLng,minLat,maxLng,maxLat]
+      const res = await zoningApi.runAnalysis(
+        { mode: 'drawn', bbox: bboxArray }, // studyArea
+        { term }                             // extra params
+      );
       setOverlays(res.overlays || []);
       setRecs(res.recommendations || []);
       if (res.contextId) setContextId(res.contextId);
     } finally {
       setLoading(false);
     }
-  }, [studyArea, radius]);
+  }, [bbox, term]);
 
   return {
-    studyArea, setStudyArea,
-    radius, setRadius,
+    bbox, setBbox,
+    term, setTerm,
     overlays, recs, loading, runAnalysis,
     contextId
   };

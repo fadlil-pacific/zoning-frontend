@@ -10,8 +10,8 @@ import React from 'react';
 
 export default function App() {
   const {
-    studyArea, setStudyArea,
-    radius, setRadius,
+    bbox, setBbox,
+    term, setTerm,
     overlays, recs, loading, runAnalysis,
     contextId
   } = useZoning();
@@ -43,10 +43,10 @@ export default function App() {
           {/* Sidebar kiri */}
           <Grid /* item */ /* xs={12} md={3} lg={3} */ size={{ xs: 12, md: 3, lg: 3 }}>
             <SidebarControls
-              studyArea={studyArea}
-              setStudyArea={setStudyArea}
-              radius={radius}
-              setRadius={setRadius}
+              bbox={bbox}
+              setBbox={setBbox}
+              term={term}
+              setTerm={setTerm}
               onRun={runAnalysis}
               loading={loading}
             />
@@ -55,8 +55,19 @@ export default function App() {
 
           {/* Map tengah */}
           <Grid /* item */ /* xs={12} md={6} lg={6} */ size={{ xs: 12, md: 6, lg: 6 }}>
-            <MapCanvas geojsonOverlays={overlays} 
-            // recommendations={recs} 
+            <MapCanvas
+              geojsonOverlays={overlays}
+              recommendations={recs}
+              bbox={bbox}
+              onBBoxChange={(bounds) => {
+                if (!bounds) { setBbox(null); return; }
+                setBbox({
+                  south: bounds.getSouth(),
+                  west:  bounds.getWest(),
+                  north: bounds.getNorth(),
+                  east:  bounds.getEast()
+                });
+              }}
             />
           </Grid>
 
