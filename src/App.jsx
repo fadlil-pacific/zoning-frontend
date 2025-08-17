@@ -1,39 +1,50 @@
 import { Container, Grid, Box } from '@mui/material';
 import Header from './layout/Header';
 import SidebarControls from './components/SidebarControls';
-import Recommendations from './components/Recommendations';
+// Hapus rekomendasi karena kita tidak pakai analisis terpisah lagi
+// import Recommendations from './components/Recommendations';
 import MapCanvas from './components/MapCanvas';
 import ChatPanel from './components/ChatPanel';
 import { useZoning } from './hooks/useZoning';
-import { zoningApi } from './services/zoningApi';
 import React from 'react';
+// pastikan askChat di services menerima objek: { message, term, bbox, contextId }
+import { askChat } from './services/zoningApi';
 
 export default function App() {
-  const {
-    bbox, setBbox,
-    term, setTerm,
-    overlays, recs, loading, runAnalysis,
-    contextId
-  } = useZoning();
-
+  const { bbox, setBbox, term, setTerm, sendChat } = useZoning();
   const [messages, setMessages] = React.useState([]);
+  const [isSending, setIsSending] = React.useState(false);
+  const abortRef = React.useRef(null);
 
   const handleSend = async (text) => {
-    setMessages((m)=>[...m, { role:'user', content:text }]);
+    setMessages((m) => [...m, { role: 'user', content: text }]);
+
+    if (!bbox) {
+      setMessages((m) => [...m, { role: 'assistant', content: 'Please draw a rectangle on the map first.' }]);
+      return;
+    }
+
+    // batalin request sebelumnya (kalau user spam)
+    abortRef.current?.abort?.();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      // coba backend (atau mock bila VITE_USE_MOCK=true)
-      const { reply } = await zoningApi.askChat(text, contextId);
-      setMessages((m)=>[...m, { role:'assistant', content: reply }]);
-    } catch {
-      // fallback ekstra
-      const first = recs[0];
-      const fallback = first
-        ? `Suggested ${first.type} karena: ${first.reason}`
-        : 'Belum ada hasil analisis.';
-      setMessages((m)=>[...m, { role:'assistant', content: fallback }]);
+      setIsSending(true);
+      const { reply, raw } = await sendChat(text, controller.signal);
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: reply?.trim() ? reply : `No answer. Raw: ${JSON.stringify(raw)}` }
+      ]);
+    } catch (e) {
+      const msg = e.name === 'CanceledError' || e.name === 'AbortError'
+        ? 'Request canceled.'
+        : `Chat API error. ${(e.response && e.response.status) ? `Status ${e.response.status}` : ''}`;
+      setMessages((m) => [...m, { role: 'assistant', content: msg }]);
+    } finally {
+      setIsSending(false);
     }
   };
-
 
   return (
     <Box>
@@ -44,20 +55,17 @@ export default function App() {
           <Grid /* item */ /* xs={12} md={3} lg={3} */ size={{ xs: 12, md: 3, lg: 3 }}>
             <SidebarControls
               bbox={bbox}
-              setBbox={setBbox}
               term={term}
               setTerm={setTerm}
-              onRun={runAnalysis}
-              loading={loading}
             />
-            <Recommendations items={recs} />
+            {/* <Recommendations items={recs} />  // tidak dipakai lagi */}
           </Grid>
 
           {/* Map tengah */}
           <Grid /* item */ /* xs={12} md={6} lg={6} */ size={{ xs: 12, md: 6, lg: 6 }}>
             <MapCanvas
-              geojsonOverlays={overlays}
-              recommendations={recs}
+              geojsonOverlays={{}}      // boleh kosong; MapCanvas tetap tampil
+              recommendations={[]}             // tidak dipakai
               bbox={bbox}
               onBBoxChange={(bounds) => {
                 if (!bounds) { setBbox(null); return; }
@@ -73,7 +81,13 @@ export default function App() {
 
           {/* Chat kanan */}
           <Grid /* item */ /* xs={12} md={3} lg={3} */ size={{ xs: 12, md: 3, lg: 3 }}>
-            <ChatPanel messages={messages} onSend={handleSend} disabled={loading} />
+            <ChatPanel
+              messages={messages}
+              onSend={handleSend}
+              disabled={!bbox || isSending}
+              loading={isSending}
+              hint="Please draw a rectangle on the map first."
+            />
           </Grid>
         </Grid>
       </Container>

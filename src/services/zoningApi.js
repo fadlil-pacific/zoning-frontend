@@ -1,51 +1,35 @@
 import api from './apiClient';
 
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK || 'false') === 'true';
+const USE_MOCK = String(import.meta.env.VITE_USE_MOCK || '').toLowerCase() === 'true';
 
-const mockOverlays = [
-  { kind: 'residential', geojson: { /* … */ } },
-  { kind: 'commercial',  geojson: { /* … */ } },
-  { kind: 'residential', geojson: { /* … */ } },
-  { kind: 'industrial',  geojson: { /* … */ } },
-];
-
-const mockRecs = [
-  {
-    id: 'r1',
-    type: 'school',
-    reason: 'Population density tinggi, tidak ada sekolah dalam 1km',
-    location: { /* point/area */ }
-  },
-  {
-    id: 'r2',
-    type: 'park',
-    reason: 'Kekurangan ruang hijau pada blok padat penduduk',
-  }
-];
-
-async function safePost(url, payload, fallback) {
-  if (USE_MOCK) return fallback;
-  try {
-    const { data } = await api.post(url, payload);
-    return data;
-  } catch (e) {
-    console.warn('API error, fallback to mock:', e?.message || e);
-    return fallback;
-  }
+function buildDefaultPrompt(term, bbox) {
+  const f = (n) => (Number.isFinite(n) ? Number(n).toFixed(5) : '');
+  const north = f(bbox?.north), west = f(bbox?.west);
+  const south = f(bbox?.south), east = f(bbox?.east);
+  return `Use the rectangle tool: term="${term || ''}", top-left=(${north},${west}), bottom-right=(${south},${east}). Then summarize the all result.`;
 }
 
-export const zoningApi = {
-  getOverlays: async (studyArea, radius) =>
-    safePost('/zoning/overlays', { studyArea, radius }, { overlays: mockOverlays }),
+function normalizeChatResponse(data) {
+  let reply =
+    data?.answer ??
+    data?.reply ??
+    data?.message ??
+    data?.content ??
+    data?.result ??
+    data?.text ??
+    (Array.isArray(data?.choices) ? data.choices[0]?.message?.content : undefined);
+  if (reply && typeof reply === 'object') reply = JSON.stringify(reply);
+  return { reply: reply ?? '', raw: data };
+}
 
-  runAnalysis: async (studyArea, extra = {}) => {
-    // extra dapat berisi { term }
-    const { data } = await api.post('/zoning/analysis', { studyArea, ...extra });
-    return data;
-  },
+export async function askChat({ message, term, bbox, signal }) {
+  const preamble = buildDefaultPrompt(term, bbox);
+  const query = `${preamble} ${message || ''}`.trim();
 
-  askChat: async (message, contextId) =>
-    safePost('/zoning/chat', { message, contextId }, {
-      reply: 'Rekomendasi sekolah karena kepadatan penduduk tinggi dan tidak ada sekolah dalam radius 1km.'
-    })
-};
+  if (USE_MOCK) return { reply: `[MOCK] ${query}`, raw: { mock: true } };
+
+  // Lewat proxy Vite → bebas CORS saat dev
+  const url = '/agent/ask';
+  const { data } = await api.post(url, { query }, { signal });
+  return normalizeChatResponse(data);
+}

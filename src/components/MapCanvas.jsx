@@ -1,4 +1,4 @@
-// 3) Ganti seluruh src/components/MapCanvas.jsx dengan versi ini (tanpa react-leaflet-draw)
+// src/components/MapCanvas.jsx
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Paper } from '@mui/material';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
@@ -6,86 +6,96 @@ import L from 'leaflet';
 import 'leaflet-draw';
 
 /**
- * Props:
- * - geojsonOverlays: Array<{ kind: string, geojson: FeatureCollection }>
- * - recommendations: Array<{ id: string, type: string, location?: Feature|FeatureCollection }>
- * - bbox: { south:number, west:number, north:number, east:number } | null
+ * Props (tolerant):
+ * - geojsonOverlays: Array<{ kind, geojson }> | { kind, geojson } | null | undefined
+ * - recommendations: Array<{ id, type, location }> | { id, type, location } | null | undefined
+ * - bbox: { south, west, north, east } | null
  * - onBBoxChange: (bounds: L.LatLngBounds | null) => void
  */
-export default function MapCanvas({ geojsonOverlays = [], recommendations = [], bbox, onBBoxChange }) {
+export default function MapCanvas({
+  geojsonOverlays,
+  recommendations,
+  bbox,
+  onBBoxChange
+}) {
+  // --- Normalize props to arrays so .map() is always safe ---
+  const overlaysArr = useMemo(() => {
+    if (Array.isArray(geojsonOverlays)) return geojsonOverlays;
+    if (geojsonOverlays && typeof geojsonOverlays === 'object') return [geojsonOverlays];
+    return [];
+  }, [geojsonOverlays]);
+
+  const recsArr = useMemo(() => {
+    if (Array.isArray(recommendations)) return recommendations;
+    if (recommendations && typeof recommendations === 'object') return [recommendations];
+    return [];
+  }, [recommendations]);
+
   const allCollections = useMemo(() => {
-    const recGeo = recommendations.filter(r => r.location).map(r => r.location);
-    return [...geojsonOverlays.map(o => o.geojson), ...recGeo];
-  }, [geojsonOverlays, recommendations]);
+    const recGeo = recsArr.filter(r => r?.location).map(r => r.location);
+    return [...overlaysArr.map(o => o?.geojson).filter(Boolean), ...recGeo];
+  }, [overlaysArr, recsArr]);
 
   return (
-    <Paper sx={{ height: 'calc(100vh - 140px)', minHeight: 460, overflow: 'hidden' }}>
-      <MapContainer
-        center={[-6.1754, 106.8272]} // Jakarta default [lat,lng]
-        zoom={12}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-
-        {/* Overlays */}
-        {geojsonOverlays.map((ov, idx) => (
-          <GeoJSON
-            key={`ov-${idx}`}
-            data={ov.geojson}
-            style={{
-              color: '#6b7280',
-              weight: 1,
-              fillOpacity: 0.6,
-              fillColor:
-                ov.kind === 'residential' ? '#f7e0a3' :
-                ov.kind === 'commercial'  ? '#cde2f7' :
-                ov.kind === 'industrial'  ? '#d9d9d9' :
-                ov.kind === 'park'        ? '#bfe3c0' : '#eaeaea'
-            }}
-            pointToLayer={(_, latlng) => L.circleMarker(latlng, { radius: 5, color: '#6b7280', weight: 1 })}
+    <Paper sx={{ p: 0, overflow: 'hidden' }}>
+      <div style={{ height: 'calc(100vh - 160px)', minHeight: 460 }}>
+        <MapContainer
+          center={[35.6895, 139.6917]} // Tokyo
+          zoom={12}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="&copy; OpenStreetMap contributors"
           />
-        ))}
 
-        {/* Auto fit to data */}
-        <AutoFit collections={allCollections} />
+          {/* Overlays */}
+          {overlaysArr.map((ov, idx) => (
+            ov?.geojson ? (
+              <GeoJSON
+                key={`ov-${idx}`}
+                data={ov.geojson}
+                style={{
+                  color: '#6b7280', weight: 1, fillOpacity: 0.6,
+                  fillColor:
+                    ov.kind === 'residential' ? '#f7e0a3' :
+                    ov.kind === 'commercial'  ? '#cde2f7' :
+                    ov.kind === 'industrial'  ? '#d9d9d9' :
+                    ov.kind === 'park'        ? '#bfe3c0' : '#eaeaea'
+                }}
+                pointToLayer={(_, latlng) => L.circleMarker(latlng, { radius: 5, color: '#6b7280', weight: 1 })}
+              />
+            ) : null
+          ))}
 
-        {/* Draw rectangle control (Leaflet.Draw original) */}
-        <DrawBBox bbox={bbox} onBBoxChange={onBBoxChange} />
-      </MapContainer>
+          <AutoFit collections={allCollections} />
+          <DrawBBox bbox={bbox} onBBoxChange={onBBoxChange} />
+        </MapContainer>
+      </div>
     </Paper>
   );
 }
 
-/** Fit bounds helper */
 function AutoFit({ collections }) {
   const map = useMap();
   useEffect(() => {
-    if (!collections.length) return;
-    const group = L.featureGroup(
-      collections.filter(Boolean).map(fc => L.geoJSON(fc))
-    );
-    if (group.getLayers().length) {
-      map.fitBounds(group.getBounds(), { padding: [40, 40] });
-    }
+    const valid = collections.filter(Boolean);
+    if (!valid.length) return;
+    const group = L.featureGroup(valid.map(fc => L.geoJSON(fc)));
+    if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [40, 40] });
   }, [collections, map]);
   return null;
 }
 
-/** Adds Leaflet.Draw controls without a React wrapper */
 function DrawBBox({ bbox, onBBoxChange }) {
   const map = useMap();
-  const fgRef = useRef(L.featureGroup());     // container untuk rectangle yang digambar
+  const fgRef = useRef(L.featureGroup());
   const drawControlRef = useRef(null);
 
-  // mount: pasang featureGroup & control + event handlers
   useEffect(() => {
     const fg = fgRef.current;
     map.addLayer(fg);
 
-    // hanya rectangle; edit/remove aktif untuk fg
     const drawControl = new L.Control.Draw({
       draw: {
         rectangle: { shapeOptions: { color: '#1f2a44', weight: 1, dashArray: '4 4' } },
@@ -96,24 +106,22 @@ function DrawBBox({ bbox, onBBoxChange }) {
     drawControlRef.current = drawControl;
     map.addControl(drawControl);
 
-    // handlers
     const onCreated = (e) => {
       if (e.layerType !== 'rectangle') return;
-      fg.clearLayers();            // hanya 1 rectangle
+      fg.clearLayers();
       fg.addLayer(e.layer);
-      if (onBBoxChange && e.layer.getBounds) onBBoxChange(e.layer.getBounds());
+      onBBoxChange?.(e.layer.getBounds());
     };
     const onEdited = (e) => {
       const layers = e.layers.getLayers();
-      if (layers.length && onBBoxChange) onBBoxChange(layers[0].getBounds());
+      if (layers.length) onBBoxChange?.(layers[0].getBounds());
     };
-    const onDeleted = () => { if (onBBoxChange) onBBoxChange(null); };
+    const onDeleted = () => onBBoxChange?.(null);
 
     map.on(L.Draw.Event.CREATED, onCreated);
     map.on(L.Draw.Event.EDITED, onEdited);
     map.on(L.Draw.Event.DELETED, onDeleted);
 
-    // cleanup on unmount
     return () => {
       map.off(L.Draw.Event.CREATED, onCreated);
       map.off(L.Draw.Event.EDITED, onEdited);
@@ -123,12 +131,11 @@ function DrawBBox({ bbox, onBBoxChange }) {
     };
   }, [map, onBBoxChange]);
 
-  // sync: kalau prop bbox berubah dari luar, gambarkan ulang rectangle-nya
   useEffect(() => {
     const fg = fgRef.current;
     fg.clearLayers();
     if (!bbox) return;
-    const bounds = L.latLngBounds([bbox.south, bbox.west], [bbox.north, bbox.east]); // [SW],[NE]
+    const bounds = L.latLngBounds([bbox.south, bbox.west], [bbox.north, bbox.east]);
     const rect = L.rectangle(bounds, { color: '#1f2a44', weight: 1, dashArray: '4 4' });
     fg.addLayer(rect);
     map.fitBounds(bounds, { padding: [40, 40] });

@@ -1,15 +1,11 @@
+// src/services/apiClient.js
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
-  timeout: 20000,
-});
-
-// contoh interceptor (token, tracing, dll)
-api.interceptors.request.use((config) => {
-  // const token = localStorage.getItem('token')
-  // if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+  // baseURL boleh kosong karena kita pakai URL absolut / path relatif
+  timeout: 120000, // 120s, sesuaikan dgn durasi backend
+  withCredentials: false,
+  validateStatus: (status) => status >= 200 && status < 300,
 });
 
 export default api;
