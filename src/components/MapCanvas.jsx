@@ -1,35 +1,19 @@
-// src/components/MapCanvas.jsx
+// src/components/MapCanvas.jsx  (tambahan prop: results)
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Paper } from '@mui/material';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-draw';
 
-/**
- * Props (tolerant):
- * - geojsonOverlays: Array<{ kind, geojson }> | { kind, geojson } | null | undefined
- * - recommendations: Array<{ id, type, location }> | { id, type, location } | null | undefined
- * - bbox: { south, west, north, east } | null
- * - onBBoxChange: (bounds: L.LatLngBounds | null) => void
- */
 export default function MapCanvas({
   geojsonOverlays,
   recommendations,
   bbox,
-  onBBoxChange
+  onBBoxChange,
+  results = []       // <-- NEW
 }) {
-  // --- Normalize props to arrays so .map() is always safe ---
-  const overlaysArr = useMemo(() => {
-    if (Array.isArray(geojsonOverlays)) return geojsonOverlays;
-    if (geojsonOverlays && typeof geojsonOverlays === 'object') return [geojsonOverlays];
-    return [];
-  }, [geojsonOverlays]);
-
-  const recsArr = useMemo(() => {
-    if (Array.isArray(recommendations)) return recommendations;
-    if (recommendations && typeof recommendations === 'object') return [recommendations];
-    return [];
-  }, [recommendations]);
+  const overlaysArr = Array.isArray(geojsonOverlays) ? geojsonOverlays : (geojsonOverlays ? [geojsonOverlays] : []);
+  const recsArr     = Array.isArray(recommendations) ? recommendations : (recommendations ? [recommendations] : []);
 
   const allCollections = useMemo(() => {
     const recGeo = recsArr.filter(r => r?.location).map(r => r.location);
@@ -49,7 +33,6 @@ export default function MapCanvas({
             attribution="&copy; OpenStreetMap contributors"
           />
 
-          {/* Overlays */}
           {overlaysArr.map((ov, idx) => (
             ov?.geojson ? (
               <GeoJSON
@@ -70,6 +53,9 @@ export default function MapCanvas({
 
           <AutoFit collections={allCollections} />
           <DrawBBox bbox={bbox} onBBoxChange={onBBoxChange} />
+
+          {/* NEW: layer untuk hasil MCP */}
+          <ResultsLayer results={results} />
         </MapContainer>
       </div>
     </Paper>
@@ -140,6 +126,39 @@ function DrawBBox({ bbox, onBBoxChange }) {
     fg.addLayer(rect);
     map.fitBounds(bounds, { padding: [40, 40] });
   }, [bbox, map]);
+
+  return null;
+}
+
+// === NEW: tampilkan marker hasil MCP + auto fit ===
+function ResultsLayer({ results = [] }) {
+  const map = useMap();
+  const groupRef = useRef(L.layerGroup());
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!map.hasLayer(group)) map.addLayer(group);
+    group.clearLayers();
+
+    const pts = [];
+    (Array.isArray(results) ? results : []).forEach((r) => {
+      const lat = Number(r?.lat), lon = Number(r?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      pts.push([lat, lon]);
+      const marker = L.circleMarker([lat, lon], { radius: 6, weight: 2 });
+      marker.bindPopup(
+        `<strong>${(r.title || '').replace(/</g,'&lt;')}</strong><br/>Year: ${r.year ?? '-'}<br/>${lat.toFixed(5)}, ${lon.toFixed(5)}`
+      );
+      group.addLayer(marker);
+    });
+
+    if (pts.length) {
+      const bounds = L.latLngBounds(pts);
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+    }
+
+    return () => { if (map.hasLayer(group)) map.removeLayer(group); };
+  }, [results, map]);
 
   return null;
 }

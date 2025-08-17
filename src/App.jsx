@@ -9,9 +9,10 @@ import { useZoning } from './hooks/useZoning';
 import React from 'react';
 // pastikan askChat di services menerima objek: { message, term, bbox, contextId }
 import { askChat } from './services/zoningApi';
+import SearchResultsList from './components/SearchResultsList';
 
 export default function App() {
-  const { bbox, setBbox, term, setTerm, sendChat } = useZoning();
+  const { bbox, setBbox, term, setTerm, results, sendChat } = useZoning();
   const [messages, setMessages] = React.useState([]);
   const [isSending, setIsSending] = React.useState(false);
   const abortRef = React.useRef(null);
@@ -52,21 +53,16 @@ export default function App() {
       <Container maxWidth="xl" sx={{ mt: 2 }}>
         <Grid container spacing={2} alignItems="flex-start">
           {/* Sidebar kiri */}
-          <Grid /* item */ /* xs={12} md={3} lg={3} */ size={{ xs: 12, md: 3, lg: 3 }}>
-            <SidebarControls
-              bbox={bbox}
-              term={term}
-              setTerm={setTerm}
-            />
-            {/* <Recommendations items={recs} />  // tidak dipakai lagi */}
+          <Grid size={{ xs: 12, md: 3, lg: 3 }}>
+            <SidebarControls bbox={bbox} term={term} setTerm={setTerm} />
+            <SearchResultsList items={results} /> {/* <-- tampilkan di bawah sidebar */}
           </Grid>
 
           {/* Map tengah */}
-          <Grid /* item */ /* xs={12} md={6} lg={6} */ size={{ xs: 12, md: 6, lg: 6 }}>
+          <Grid size={{ xs: 12, md: 6, lg: 6 }}>
             <MapCanvas
-              geojsonOverlays={{}}      // boleh kosong; MapCanvas tetap tampil
-              recommendations={[]}             // tidak dipakai
               bbox={bbox}
+              results={results}                // <-- kirim ke map untuk marker
               onBBoxChange={(bounds) => {
                 if (!bounds) { setBbox(null); return; }
                 setBbox({
