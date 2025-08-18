@@ -1,14 +1,16 @@
-import { AppBar, Toolbar, Typography, IconButton } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-
-export default function Header() {
+// src/layout/Header.jsx (contoh cepat)
+import { AppBar, Toolbar, Typography, Box, ToggleButtonGroup, ToggleButton } from '@mui/material';
+export default function Header({ title='Zoning Planner', lang='en', setLang }) {
   return (
-    <AppBar position="static" elevation={0} color="transparent" sx={{ borderBottom: '1px solid #e5e7eb' }}>
-      <Toolbar sx={{ justifyContent: 'center' }}>
-        <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 700, textAlign: 'center' }}>
-          ゾーニング分析
-        </Typography>
-        <IconButton size="large"><MenuIcon /></IconButton>
+    <AppBar position="static" elevation={0} color="transparent">
+      <Toolbar>
+        <Typography variant="h6" sx={{ flex:1, textAlign: 'center' }}>{title}</Typography>
+        <Box>
+          <ToggleButtonGroup size="small" value={lang} exclusive onChange={(_,v)=>v&&setLang(v)}>
+            <ToggleButton value="en">EN</ToggleButton>
+            <ToggleButton value="ja">日本語</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
       </Toolbar>
     </AppBar>
   );

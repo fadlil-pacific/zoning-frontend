@@ -5,7 +5,7 @@ export default function SidebarControls({ bbox, term, setTerm }) {
   return (
     <Stack spacing={2}>
       <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle1" fontWeight={700}>Search Term</Typography>
+        <Typography variant="subtitle1" fontWeight={700}>検索用語（Search Term）</Typography>
         <TextField
           size="small"
           fullWidth
@@ -16,7 +16,7 @@ export default function SidebarControls({ bbox, term, setTerm }) {
         />
 
         <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 2 }}>
-          Bounding Box
+          分析範囲 (Analysis Area)
         </Typography>
         <Typography variant="caption" color="text.secondary">
           Draw rectangle on the map. These fields are read-only.
